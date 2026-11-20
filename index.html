@@ -140,6 +140,19 @@
   .bot__in input{flex:1;font:inherit;font-size:16px;border:1px solid var(--line-2);border-radius:30px;padding:11px 16px;background:var(--paper);min-width:0}
   .bot__in button{width:46px;border:0;border-radius:50%;background:var(--orange);color:#fff;font-size:20px;cursor:pointer}
   .askcta{display:inline-flex;align-items:center;gap:8px;margin-top:18px;font:inherit;font-size:15px;border:1px solid var(--ink);background:transparent;border-radius:40px;padding:11px 18px;cursor:pointer;color:var(--ink)}
+
+  /* ---------- live ---------- */
+  .conn{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink-2);margin-top:22px}
+  .conn .dot{position:static}
+  .sum__last{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12);font-size:13px;opacity:.75}
+  .sum__last b{font-weight:500}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:3px}
+  .pill.g{background:#EEF6D2;color:#3E5A0A}.pill.a{background:#FFF4DC;color:#8A5A00}
+  .submit{margin-top:18px;display:flex;flex-direction:column;gap:10px}
+  .submit label{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);display:flex;align-items:center;gap:10px}
+  .submit label input{flex:1;font:inherit;font-family:var(--f);font-size:16px;text-transform:none;letter-spacing:0;color:var(--ink);border:1px solid var(--line-2);border-radius:3px;padding:9px 10px;background:var(--paper);min-width:0}
+  #submitBtn{font:inherit;font-size:17px;font-weight:500;border:0;border-radius:4px;padding:16px;background:var(--ink);color:#fff;cursor:pointer;width:100%}
+  #submitBtn.done{background:#EEF6D2;color:#3E5A0A;border:1px solid #9DBA3C}
 </style>
 </head>
 <body>
@@ -150,9 +163,10 @@
   <div class="wrap">
     <p class="eyebrow">Fuel log · race day</p>
     <h1>Did he<br><em>actually eat it?</em></h1>
-    <p class="lede">At every crew stop, before you hand him the next packet, ask what he finished. Count the empty wrappers and flasks. He will say “all of it”. Count anyway. Tap once for eaten, twice for half, three times to clear.</p>
+    <p class="lede">At every crew stop, before you hand him the next packet, ask what he finished. Count the empty wrappers and flasks. He will say “all of it”. Count anyway. Tap once for eaten, twice for half, three times to clear. Then hit Submit, and every crew phone has it.</p>
     <button class="askcta" data-open-bot>Something’s wrong? Ask the crew bot →</button>
 
+    <p class="conn" id="conn"></p>
     <div class="sum" id="sum"></div>
 
     <div class="tabs" id="tabs"></div>
@@ -169,7 +183,7 @@
       <button class="btn-s" id="share">Send update to WhatsApp</button>
       <button class="btn-ghost" id="reset">Clear the log</button>
     </div>
-    <p class="note">The log saves on this phone only, in this browser. It doesn’t sync. Pick one phone to be the fuel phone and keep using that one. If it dies, the WhatsApp updates are your backup. Carb numbers are from the packets where we had them and estimates where we didn’t (potatoes, smoothie, Coke).</p>
+    <p class="note">Live: when anyone hits Submit, every crew phone with this page open updates. No signal? It saves on your phone and sends itself when you’re back in range. Carb numbers are from the packets where we had them and estimates where we didn’t (potatoes, smoothie, Coke).</p>
   </div>
 </main>
 
@@ -227,53 +241,135 @@
   ];
   const EXTRAS = ['revive','sweets','biltong','chick'];
 
-  /* ---------- state ---------- */
-  const KEY = 'utct-fuellog-v1';
-  let S;
-  try { S = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { S = {}; }
-  S.arr = S.arr || {}; S.it = S.it || {}; S.n = S.n || {}; S.note = S.note || {};
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
-  let cur = S.cur || (LEGS.find(l => !S.arr[l.id]) || LEGS[LEGS.length - 1]).id;
+  /* ---------- live database (Firebase Realtime Database over REST) ---------- */
+  const DB_URL = (new URLSearchParams(location.search).get('db') || 'FIREBASE_DB_URL').replace(/\/$/, '');
+  const ROOT = DB_URL + '/utct2026/log';
+  const LIVE = /^https?:\/\//.test(DB_URL);
+
+  /* ---------- state ----------
+     R      = submitted entries, shared by every phone   { legId: {arr, it:{}, n:{}, note, by, at} }
+     W      = this phone's working copy of a leg while you tick things
+     queue  = submits that haven't reached the database yet (no signal) */
+  const LS = k => 'utct-live-' + k;
+  const load = (k, d) => { try { return JSON.parse(localStorage.getItem(LS(k))) || d; } catch (e) { return d; } };
+  const keep = (k, v) => { try { localStorage.setItem(LS(k), JSON.stringify(v)); } catch (e) {} };
+  let R = load('remote', {}), W = load('work', {}), queue = load('queue', {});
+  let me = load('me', '');
+  let conn = 'connecting';
+  const blank = () => ({ arr: null, it: {}, n: {}, note: '' });
+  const norm = e => e ? { arr: e.arr || null, it: e.it || {}, n: e.n || {}, note: e.note || '', by: e.by || '', at: e.at || 0 } : null;
+  const entry = id => norm(queue[id]) || norm(R[id]);            // what counts for totals
+  const work = id => W[id] || (W[id] = JSON.parse(JSON.stringify(entry(id) || blank())));
+  const view = id => W[id] || JSON.parse(JSON.stringify(entry(id) || blank()));   // look without touching
+  const dirty = id => { const a = W[id], b = entry(id) || blank(); if (!a) return false;
+    return JSON.stringify([a.arr || null, a.it, a.n, a.note || '']) !== JSON.stringify([b.arr || null, b.it, b.n, b.note || '']); };
+  let cur = load('cur', null) || (LEGS.find(l => !entry(l.id)) || LEGS[LEGS.length - 1]).id;
 
   /* ---------- maths ---------- */
-  const val = o => ({ c: o.c || 0, na: o.na || 0, caf: o.caf || 0 });
-  function legTotals(l) {
+  function legTotals(l, e) {
+    e = e === undefined ? entry(l.id) : e; e = e || blank();
     let c = 0, na = 0, caf = 0, plan = 0;
-    l.items.forEach(t => { const v = S.it[l.id + ':' + t.id] || 0, f = F[t.f]; plan += f.c;
-      c += f.c * v; na += (f.na || 0) * v; caf += (f.caf || 0) * v; });
-    const counted = new Set();
-    [...l.table, ...EXTRAS].forEach(k => { if (counted.has(k)) return; counted.add(k);
-      const n = S.n[l.id + ':' + k] || 0, f = F[k]; c += f.c * n; na += (f.na || 0) * n; caf += (f.caf || 0) * n; });
+    l.items.forEach(t => { const v = e.it[t.id] || 0, f = F[t.f]; plan += f.c; c += f.c * v; na += (f.na || 0) * v; caf += (f.caf || 0) * v; });
+    [...new Set([...l.table, ...EXTRAS])].forEach(k => { const n = e.n[k] || 0, f = F[k]; c += f.c * n; na += (f.na || 0) * n; caf += (f.caf || 0) * n; });
     return { c, na, caf, plan };
   }
-  function legStart(i) { return i === 0 ? START : S.arr[LEGS[i - 1].id]; }
-  function legHours(i) { const a = legStart(i), b = S.arr[LEGS[i].id]; return a && b && b > a ? (b - a) / 36e5 : null; }
+  const arrOf = i => { const e = entry(LEGS[i].id); return e && e.arr; };
+  function legStart(i) { return i === 0 ? START : arrOf(i - 1); }
+  function legHours(i, arr) { const a = legStart(i), b = arr !== undefined ? arr : arrOf(i); return a && b && b > a ? (b - a) / 36e5 : null; }
   function overall() {
     let c = 0, na = 0, caf = 0, last = null, legsDone = 0;
-    LEGS.forEach((l, i) => { const t = legTotals(l); c += t.c; na += t.na; caf += t.caf; if (S.arr[l.id]) { last = S.arr[l.id]; legsDone = i + 1; } });
+    LEGS.forEach((l, i) => { const t = legTotals(l); c += t.c; na += t.na; caf += t.caf; if (arrOf(i)) { last = arrOf(i); legsDone = i + 1; } });
     const h = last ? (last - START) / 36e5 : null;
-    let planToDate = 0; LEGS.slice(0, legsDone).forEach(l => planToDate += legTotals(l).plan);
+    let planToDate = 0; LEGS.slice(0, legsDone).forEach(l => planToDate += legTotals(l, null).plan);
     return { c, na, caf, h, gph: h ? c / h : null, naph: h ? na / h : null, legsDone, planToDate };
   }
   function mood(g) {
-    if (g == null) return ['', 'Nothing logged yet. He’s probably fine. Probably.'];
+    if (g == null) return ['', 'Nothing submitted yet. He’s probably fine. Probably.'];
     if (g >= 70) return ['g', 'He’s eating. Leave him alone.'];
     if (g >= 55) return ['a', 'Bit light. Put food in his hand without asking.'];
     return ['r', 'He’s running on vibes. Feed him now, discuss later.'];
   }
-  const fmtT = ms => { const d = new Date(ms); return d.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Johannesburg' }); };
+  const fmtT = ms => new Date(ms).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Johannesburg' });
   const fmtH = h => { const m = Math.round(h * 60); return Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0'); };
-  function parseHM(str) { // HH:MM SAST on race day; before 04:00 = Sunday
-    const [hh, mm] = str.split(':').map(Number); if (isNaN(hh)) return null;
-    let t = new Date('2026-11-21T00:00:00+02:00').getTime() + (hh * 60 + mm) * 6e4;
-    if (hh < 4) t += 864e5; return t;
+  const ago = ms => { const m = Math.round((Date.now() - ms) / 6e4); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : fmtH(m / 60) + ' ago'; };
+  function parseHM(str) { const [hh, mm] = str.split(':').map(Number); if (isNaN(hh)) return null;
+    let t = new Date('2026-11-21T00:00:00+02:00').getTime() + (hh * 60 + mm) * 6e4; if (hh < 4) t += 864e5; return t; }
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  /* ---------- sync ---------- */
+  function setAt(obj, path, data) {
+    const parts = path.split('/').filter(Boolean);
+    if (!parts.length) return data || {};
+    let o = obj; for (let i = 0; i < parts.length - 1; i++) { o[parts[i]] = o[parts[i]] && typeof o[parts[i]] === 'object' ? o[parts[i]] : {}; o = o[parts[i]]; }
+    const k = parts[parts.length - 1]; if (data === null) delete o[k]; else o[k] = data; return obj;
+  }
+  let seen = new Set(LEGS.filter(l => entry(l.id)).map(l => l.id));
+  function onRemote() {
+    // someone else just submitted the stop this phone is looking at, and we haven't touched it: move on
+    const fresh = LEGS.filter(l => entry(l.id) && !seen.has(l.id)).map(l => l.id);
+    if (fresh.includes(cur) && !dirty(cur)) { const i = LEGS.findIndex(l => l.id === cur); if (LEGS[i + 1]) { cur = LEGS[i + 1].id; keep('cur', cur); toast(`${LEGS[i].to} just came in from the crew.`); } }
+    seen = new Set(LEGS.filter(l => entry(l.id)).map(l => l.id));
+    // drop queued submits the database now has
+    Object.keys(queue).forEach(id => { if (R[id] && R[id].at === queue[id].at) delete queue[id]; });
+    keep('remote', R); keep('queue', queue);
+    // forget working copies that match what's live, so other people's edits show through
+    Object.keys(W).forEach(id => { if (!dirty(id)) delete W[id]; }); keep('work', W);
+    render();
+  }
+  let es;
+  function connect() {
+    if (!LIVE) { conn = 'off'; render(); return; }
+    try { es && es.close(); } catch (e) {}
+    es = new EventSource(ROOT + '.json');
+    es.addEventListener('put', ev => { const m = JSON.parse(ev.data); R = m.path === '/' ? (m.data || {}) : setAt(R, m.path, m.data); conn = 'live'; onRemote(); });
+    es.addEventListener('patch', ev => { const m = JSON.parse(ev.data); Object.entries(m.data || {}).forEach(([k, v]) => setAt(R, m.path + '/' + k, v)); conn = 'live'; onRemote(); });
+    es.addEventListener('keep-alive', () => { if (conn !== 'live') { conn = 'live'; render(); } });
+    es.onerror = () => { conn = navigator.onLine ? 'connecting' : 'offline'; renderConn(); };
+    es.onopen = () => { conn = 'live'; renderConn(); flush(); };
+  }
+  async function flush() {
+    if (!LIVE) return;
+    for (const [id, e] of Object.entries(queue)) {
+      try {
+        const r = await fetch(ROOT + '/' + id + '.json', { method: 'PUT', body: JSON.stringify(e) });
+        if (!r.ok) throw new Error(r.status);
+        R[id] = e; delete queue[id];
+      } catch (err) { conn = navigator.onLine ? 'connecting' : 'offline'; break; }
+    }
+    keep('queue', queue); keep('remote', R); render();
+  }
+  window.addEventListener('online', () => { connect(); flush(); });
+  window.addEventListener('offline', () => { conn = 'offline'; renderConn(); });
+  setInterval(() => { if (Object.keys(queue).length) flush(); }, 15000);
+
+  function submit(id) {
+    const w = view(id);
+    if (!w.arr) { toast('Log his arrival time first.'); document.getElementById('arrIn') && document.getElementById('arrIn').focus(); return; }
+    const e = { arr: w.arr, it: w.it, n: w.n, note: w.note || '', by: me || 'Crew', at: Date.now() };
+    queue[id] = e; delete W[id]; keep('queue', queue); keep('work', W);
+    const i = LEGS.findIndex(l => l.id === id);
+    if (LEGS[i + 1]) { cur = LEGS[i + 1].id; keep('cur', cur); }
+    render(); toast(LIVE ? `${LEGS[i].to} submitted. Every crew phone has it.` : `${LEGS[i].to} saved on this phone (live database not connected yet).`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    flush();
   }
 
   /* ---------- render ---------- */
   const $ = id => document.getElementById(id);
+  function renderConn() {
+    const el = $('conn'); if (!el) return;
+    const q = Object.keys(queue).length;
+    const [cls, txt] = conn === 'off' ? ['a', 'Not connected to the live database yet · saving on this phone']
+      : q ? ['a', `${q} submit${q > 1 ? 's' : ''} waiting for signal · will send automatically`]
+      : conn === 'live' ? ['g', 'Live · every crew phone sees the same log']
+      : conn === 'offline' ? ['r', 'No signal · showing the last data this phone saw']
+      : ['', 'Connecting…'];
+    el.innerHTML = `<span class="dot ${cls}"></span>${txt}`;
+  }
   function renderSum() {
     const o = overall(), [cls, say] = mood(o.gph);
     const pct = o.planToDate ? Math.min(100, o.c / o.planToDate * 100) : 0;
+    const lastIdx = LEGS.reduce((a, l, i) => arrOf(i) ? i : a, -1), le = lastIdx >= 0 ? entry(LEGS[lastIdx].id) : null;
     $('sum').innerHTML = `
       <div class="sum__row">
         <div><div class="sum__k">Carbs in</div><div class="sum__v">${Math.round(o.c)}<small>g</small></div></div>
@@ -282,47 +378,58 @@
         <div><div class="sum__k">Caffeine</div><div class="sum__v">${Math.round(o.caf)}<small>mg</small></div></div>
       </div>
       <div class="sum__bar" title="vs plan so far"><i style="width:${pct}%"></i></div>
-      <div class="sum__say"><span class="dot ${cls}"></span><span>${say}${o.planToDate ? ` <span style="opacity:.55">· ${Math.round(pct)}% of the plan so far</span>` : ''}</span></div>`;
+      <div class="sum__say"><span class="dot ${cls}"></span><span>${say}${o.planToDate ? ` <span style="opacity:.55">· ${Math.round(pct)}% of the plan so far</span>` : ''}</span></div>
+      ${le ? `<div class="sum__last">Last update: <b>${LEGS[lastIdx].to}</b> at ${fmtT(le.arr)}${le.by ? ' · by ' + esc(le.by) : ''}${le.at ? ' · ' + ago(le.at) : ''}</div>` : ''}`;
+    renderConn();
   }
   function renderTabs() {
-    $('tabs').innerHTML = LEGS.map(l => `<button class="tab ${l.id === cur ? 'on' : ''}" data-id="${l.id}" style="--c:${l.c}"><i></i>${l.to}${S.arr[l.id] ? `<span class="ok">✓ ${fmtT(S.arr[l.id])}</span>` : ''}</button>`).join('');
+    $('tabs').innerHTML = LEGS.map(l => { const e = entry(l.id);
+      return `<button class="tab ${l.id === cur ? 'on' : ''}" data-id="${l.id}" style="--c:${l.c}"><i></i>${l.to}${e && e.arr ? `<span class="ok">✓ ${fmtT(e.arr)}</span>` : ''}</button>`; }).join('');
   }
   function renderLeg() {
-    const i = LEGS.findIndex(l => l.id === cur), l = LEGS[i], t = legTotals(l), h = legHours(i);
-    const tiles = l.items.map(it => { const v = S.it[l.id + ':' + it.id] || 0, f = F[it.f];
+    const i = LEGS.findIndex(l => l.id === cur), l = LEGS[i], w = view(cur), sub = entry(cur), d = dirty(cur);
+    const t = legTotals(l, w), h = legHours(i, w.arr);
+    const items = l.items.reduce((c, it) => c + F[it.f].c * (w.it[it.id] || 0), 0);
+    const tiles = l.items.map(it => { const v = w.it[it.id] || 0, f = F[it.f];
       return `<button class="it" data-k="${it.id}" data-v="${v}"><b>${it.label}</b><small>${f.c} g carbs${f.caf ? ' · ☕ ' + f.caf + ' mg' : ''}</small>${v === 0.5 ? '<span class="half">HALF</span>' : ''}</button>`; }).join('');
-    const stepper = k => { const n = S.n[l.id + ':' + k] || 0, f = F[k];
+    const stepper = k => { const n = w.n[k] || 0, f = F[k];
       return `<div class="st ${n ? 'has' : ''}"><div><b>${f.n}</b><small>${f.u} · ${f.c} g${f.na ? ' · ' + f.na + ' mg Na' : ''}</small></div>
         <div class="st__c"><button data-s="${k}" data-d="-1" aria-label="less">−</button><output>${n}</output><button data-s="${k}" data-d="1" aria-label="more">+</button></div></div>`; };
-    const planH = l.ph, gph = h ? t.c / h : null, [cls, say] = mood(gph);
-    const arrVal = S.arr[l.id] ? fmtT(S.arr[l.id]) : '';
+    const gph = h ? t.c / h : null, [cls, say] = mood(gph);
+    const status = sub ? (d ? `<span class="pill a">Edited · not submitted</span>` : `<span class="pill g">✓ Submitted${sub.by ? ' by ' + esc(sub.by) : ''}${sub.at ? ' · ' + ago(sub.at) : ''}${queue[cur] ? ' · waiting for signal' : ''}</span>`)
+      : (d ? `<span class="pill a">Not submitted yet</span>` : '');
     $('leg').innerHTML = `<div class="leg" style="--c:${l.c}">
       <div class="leg__top">
         <div><div class="leg__eyebrow">Leg ${i + 1} of 6 · ${l.km} km</div><h2>${l.from} → ${l.to}</h2>
-          <div class="leg__meta">Plan <b>${l.p19}</b> (19 h) · <b>${l.p24}</b> (24 h)${l.cut ? ` · cut-off <b style="color:var(--red)">${l.cut}</b>` : ''}</div></div>
-        <div class="arr"><button id="now">${S.arr[l.id] ? 'Re-log arrival now' : 'He’s here · log time'}</button>
-          <input type="time" id="arrIn" value="${arrVal}" aria-label="Arrival time"><small>${h ? 'Leg took ' + fmtH(h) : 'or type the time'}</small></div>
+          <div class="leg__meta">Plan <b>${l.p19}</b> (19 h) · <b>${l.p24}</b> (24 h)${l.cut ? ` · cut-off <b style="color:var(--red)">${l.cut}</b>` : ''}</div>
+          ${status ? `<div style="margin-top:8px">${status}</div>` : ''}</div>
+        <div class="arr"><button id="now">${w.arr ? 'Re-log arrival now' : 'He’s here · log time'}</button>
+          <input type="time" id="arrIn" value="${w.arr ? fmtT(w.arr) : ''}" aria-label="Arrival time"><small>${h ? 'Leg took ' + fmtH(h) : 'or type the time'}</small></div>
       </div>
 
-      <div class="h3"><span>What he finished on the way in</span><span>${Math.round(itemsOnly(l))} / ${t.plan} g</span></div>
-      <div class="grid" id="tiles">${tiles}</div>
+      <div class="h3"><span>What he finished on the way in</span><span>${Math.round(items)} / ${t.plan} g</span></div>
+      <div class="grid">${tiles}</div>
       <p class="hint">Tap: eaten · tap again: half · again: clear.</p>
 
       <div class="h3"><span>At the ${l.to} table, and anything extra</span></div>
-      <div class="steps" id="steps">${[...new Set([...l.table, ...EXTRAS])].map(stepper).join('')}</div>
+      <div class="steps">${[...new Set([...l.table, ...EXTRAS])].map(stepper).join('')}</div>
 
       <div class="h3"><span>How’s he looking</span></div>
-      <textarea id="note" placeholder="Grumpy, quiet, cramping, singing, whatever. Short.">${S.note[l.id] || ''}</textarea>
+      <textarea id="note" placeholder="Grumpy, quiet, cramping, singing, whatever. Short.">${esc(w.note || '')}</textarea>
 
       <div class="verdict">
         <div><small>Carbs this leg</small><b>${Math.round(t.c)} g</b></div>
-        <div><small>Per hour</small><b>${gph ? Math.round(gph) : '–'}${gph ? ' g' : ''}</b></div>
-        <div><small>Plan per hour</small><b>${Math.round(t.plan / planH)} g</b></div>
+        <div><small>Per hour</small><b>${gph ? Math.round(gph) + ' g' : '–'}</b></div>
+        <div><small>Plan per hour</small><b>${Math.round(t.plan / l.ph)} g</b></div>
         <p><span class="dot ${cls}"></span>${h ? say : 'Log his arrival time to get the per-hour number.'}</p>
+      </div>
+
+      <div class="submit">
+        <label>Submitted by <input id="me" value="${esc(me)}" placeholder="Your name" autocomplete="given-name"></label>
+        <button id="submitBtn" ${sub && !d ? 'class="done"' : ''}>${sub && !d ? `✓ ${l.to} submitted` : sub ? `Update ${l.to}` : `Submit ${l.to}`}${LEGS[i + 1] && !(sub && !d) ? ' → next stop' : ''}</button>
       </div>
     </div>`;
   }
-  function itemsOnly(l) { return l.items.reduce((c, t) => c + F[t.f].c * (S.it[l.id + ':' + t.id] || 0), 0); }
   function renderBars() {
     const max = 120;
     const cols = LEGS.map((l, i) => { const h = legHours(i), t = legTotals(l);
@@ -331,47 +438,60 @@
     $('bars').innerHTML = cols + `<div class="tgt" style="bottom:${75 / max * 100}%"><span>75 g/h</span></div>`;
     $('bl').innerHTML = LEGS.map(l => `<span>${l.to}</span>`).join('');
   }
-  function render() { renderSum(); renderTabs(); renderLeg(); renderBars(); }
+  function render() {
+    // don't redraw the leg under someone who is typing
+    const a = document.activeElement, typing = a && (a.id === 'note' || a.id === 'me' || a.id === 'arrIn');
+    renderSum(); renderTabs(); if (!typing) renderLeg(); renderBars();
+  }
 
   /* ---------- events ---------- */
+  const touch = () => { keep('work', W); render(); };
   document.addEventListener('click', e => {
     const tab = e.target.closest('.tab');
-    if (tab) { cur = tab.dataset.id; S.cur = cur; save(); render(); return; }
+    if (tab) { cur = tab.dataset.id; keep('cur', cur); render(); return; }
     const it = e.target.closest('.it');
-    if (it) { const k = cur + ':' + it.dataset.k, v = S.it[k] || 0; S.it[k] = v === 0 ? 1 : v === 1 ? 0.5 : 0; save(); render(); if (navigator.vibrate) navigator.vibrate(8); return; }
+    if (it) { const w = work(cur), k = it.dataset.k, v = w.it[k] || 0; w.it[k] = v === 0 ? 1 : v === 1 ? 0.5 : 0; if (!w.it[k]) delete w.it[k]; touch(); if (navigator.vibrate) navigator.vibrate(8); return; }
     const sb = e.target.closest('[data-s]');
-    if (sb) { const k = cur + ':' + sb.dataset.s; S.n[k] = Math.max(0, (S.n[k] || 0) + Number(sb.dataset.d)); save(); render(); return; }
-    if (e.target.id === 'now') { S.arr[cur] = Date.now(); save(); render(); toast('Logged ' + fmtT(S.arr[cur]) + '. Now count the wrappers.'); }
+    if (sb) { const w = work(cur), k = sb.dataset.s; w.n[k] = Math.max(0, (w.n[k] || 0) + Number(sb.dataset.d)); if (!w.n[k]) delete w.n[k]; touch(); return; }
+    if (e.target.id === 'now') { work(cur).arr = Date.now(); touch(); toast('Logged ' + fmtT(work(cur).arr) + '. Now count the wrappers.'); return; }
+    if (e.target.closest('#submitBtn')) { submit(cur); }
   });
   document.addEventListener('change', e => {
-    if (e.target.id === 'arrIn') { const t = parseHM(e.target.value); if (t) { S.arr[cur] = t; } else { delete S.arr[cur]; } save(); render(); }
+    if (e.target.id === 'arrIn') { const t = parseHM(e.target.value); work(cur).arr = t || null; e.target.blur(); touch(); }
   });
-  document.addEventListener('input', e => { if (e.target.id === 'note') { S.note[cur] = e.target.value; save(); } });
+  document.addEventListener('input', e => {
+    if (e.target.id === 'note') { work(cur).note = e.target.value; keep('work', W); }
+    if (e.target.id === 'me') { me = e.target.value.trim(); keep('me', me); }
+  });
+  document.addEventListener('focusout', e => { if (e.target.id === 'note' || e.target.id === 'me') setTimeout(render, 0); });
 
   $('share').addEventListener('click', async () => {
-    const o = overall(), i = LEGS.findIndex(l => l.id === cur), l = LEGS[i], t = legTotals(l), h = legHours(i);
+    const o = overall(), lastIdx = LEGS.reduce((a, l, i) => arrOf(i) ? i : a, -1);
+    const l = LEGS[Math.max(0, lastIdx)], e = entry(l.id), h = lastIdx >= 0 ? legHours(lastIdx) : null, t = legTotals(l);
     const lines = [
-      `⛽ Barney fuel check · ${l.to}${S.arr[l.id] ? ' · ' + fmtT(S.arr[l.id]) : ''}`,
+      `⛽ Barney fuel check · ${l.to}${e && e.arr ? ' · ' + fmtT(e.arr) : ''}`,
       `Total: ${Math.round(o.c)} g carbs${o.h ? ` in ${fmtH(o.h)} → ${Math.round(o.gph)} g/h (target 75)` : ''}`,
       h ? `Last leg: ${Math.round(t.c / h)} g/h` : null,
       o.naph ? `Sodium: ${Math.round(o.naph)} mg/h` : null,
       `Caffeine so far: ${Math.round(o.caf)} mg`,
-      S.note[l.id] ? `Looking: ${S.note[l.id]}` : null,
+      e && e.note ? `Looking: ${e.note}` : null,
       `Verdict: ${mood(o.gph)[1]}`
     ].filter(Boolean).join('\n');
-    if (navigator.share) { try { await navigator.share({ text: lines }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    if (navigator.share) { try { await navigator.share({ text: lines }); return; } catch (err) { if (err.name === 'AbortError') return; } }
     window.open('https://wa.me/?text=' + encodeURIComponent(lines), '_blank');
   });
-  $('reset').addEventListener('click', () => {
-    if (!confirm('Clear the whole fuel log on this phone? This can’t be undone.')) return;
-    S = { arr: {}, it: {}, n: {}, note: {} }; cur = 'kn'; save(); render(); toast('Log cleared.');
+  $('reset').addEventListener('click', async () => {
+    if (!confirm('Clear the WHOLE fuel log for every crew phone? This can’t be undone.')) return;
+    if (prompt('Type CLEAR to confirm.') !== 'CLEAR') return;
+    if (LIVE) { try { await fetch(ROOT + '.json', { method: 'DELETE' }); } catch (e) { toast('No signal. Try again.'); return; } }
+    R = {}; W = {}; queue = {}; cur = 'kn'; keep('remote', R); keep('work', W); keep('queue', queue); keep('cur', cur); render(); toast('Log cleared.');
   });
-  let tt; function toast(m) { const el = $('toast'); el.textContent = m; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2200); }
+  let tt; function toast(m) { const el = $('toast'); el.textContent = m; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2600); }
 
-  window.FUEL = { LEGS, START, F, state: () => S, overall, mood, fmtT, legHours };
-  render();
+  window.FUEL = { LEGS, START, F, state: () => ({ arr: Object.fromEntries(LEGS.map((l, i) => [l.id, arrOf(i)]).filter(x => x[1])) }), overall, mood, fmtT, legHours };
+  render(); connect();
 })();
 </script>
-<script src="bot.js?v=2"></script>
+<script src="bot.js?v=3"></script>
 </body>
 </html>
