@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fuel Log · Barney’s UTCT 100</title>
+<link rel="icon" href="barney.webp">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#F4F4EF;--paper-2:#ECEBE4;--ink:#0E0E0C;--ink-2:#3A3A36;--mute:#7C7C74;--line:rgba(14,14,12,.10);--line-2:rgba(14,14,12,.22);
+    --olive:#4C5034;--olive-2:#8B8E73;--orange:#F0612E;--navy:#10213A;--lime:#D7F26B;--red:#E2402B;
+    --f:'Geist',ui-sans-serif,system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;
+    --pad:clamp(16px,3.2vw,48px);--nav:64px;--ease:cubic-bezier(.2,.7,.1,1);color-scheme:light}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--paper);color:var(--ink);font-family:var(--f);-webkit-font-smoothing:antialiased;overflow-x:clip}
+  body{font-size:16px;line-height:1.45}
+  a{color:inherit}
+  .wrap{margin:0 auto;padding:0 var(--pad)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+  .lede{font-size:clamp(16px,1.4vw,19px);color:var(--ink-2);line-height:1.5}
+  .small{font-size:14px}
+  .top{position:fixed;top:10px;left:var(--pad);right:var(--pad);z-index:20;display:flex;align-items:center;gap:12px;background:#fff;border-radius:4px;padding:8px 12px;box-shadow:0 1px 0 var(--line)}
+  .top img{width:38px;height:38px;object-fit:contain}
+  .top b{font-weight:500;font-size:15px;display:block;line-height:1.1}
+  .top small{font-family:var(--mono);font-size:10px;color:var(--mute);letter-spacing:.06em}
+  .top a{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--mute);text-decoration:none;border:1px solid var(--line-2);border-radius:3px;padding:7px 9px;white-space:nowrap}
+</style>
+<style>
+  .fl{padding:calc(var(--nav) + 40px) 0 80px}
+  .fl .wrap{max-width:880px}
+  .fl h1{font-size:clamp(40px,8vw,84px);line-height:.92;letter-spacing:-.04em;font-weight:500;margin:10px 0 14px}
+  .fl h1 em{font-style:normal;color:var(--orange)}
+  .fl .lede{max-width:56ch}
+
+  /* summary */
+  .sum{position:sticky;top:calc(var(--nav) + 6px);z-index:5;background:var(--navy);color:#F2F3EE;border-radius:6px;padding:16px 18px;margin:26px 0 22px;box-shadow:0 10px 30px rgba(16,33,58,.18)}
+  .sum__row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .sum__k{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.55}
+  .sum__v{font-size:clamp(22px,4.6vw,34px);font-weight:500;letter-spacing:-.03em;line-height:1.05;margin-top:2px}
+  .sum__v small{font-size:.45em;opacity:.6;margin-left:2px;letter-spacing:0}
+  .sum__bar{height:6px;background:rgba(255,255,255,.12);border-radius:3px;margin:14px 0 10px;position:relative;overflow:hidden}
+  .sum__bar i{position:absolute;inset:0 auto 0 0;background:var(--lime);border-radius:3px;transition:width .5s var(--ease)}
+  .sum__bar b{position:absolute;top:-3px;bottom:-3px;width:2px;background:#fff;opacity:.7}
+  .sum__say{font-size:15px;display:flex;gap:10px;align-items:flex-start;line-height:1.35}
+  .sum__say .dot{margin-top:5px}
+  .dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--olive-2)}
+  .dot.g{background:var(--lime)} .dot.a{background:#FFC24B} .dot.r{background:var(--red)}
+
+  /* station tabs */
+  .tabs{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none;margin:0 calc(-1 * var(--pad));padding-left:var(--pad);padding-right:var(--pad)}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:none;border:1px solid var(--line-2);background:#fff;border-radius:40px;padding:9px 14px 9px 10px;font:inherit;font-size:14px;display:flex;gap:8px;align-items:center;cursor:pointer;color:var(--ink)}
+  .tab i{width:9px;height:9px;border-radius:50%;background:var(--c)}
+  .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .tab .ok{font-family:var(--mono);font-size:11px;opacity:.6}
+
+  /* leg panel */
+  .leg{background:#fff;border:1px solid var(--line);border-radius:6px;padding:20px 18px;margin-top:6px;border-top:4px solid var(--c)}
+  .leg__top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+  .leg__eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+  .leg h2{font-size:clamp(26px,5vw,38px);letter-spacing:-.03em;font-weight:500;margin:4px 0 2px;line-height:1}
+  .leg__meta{font-size:13px;color:var(--ink-2)}
+  .leg__meta b{font-weight:500}
+  .arr{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+  .arr button,.btn-s{font:inherit;font-size:14px;border:0;background:var(--orange);color:#fff;border-radius:3px;padding:10px 14px;cursor:pointer;white-space:nowrap}
+  .arr input{font:inherit;font-family:var(--mono);font-size:15px;border:1px solid var(--line-2);border-radius:3px;padding:7px 8px;background:var(--paper)}
+  .arr small{font-size:11px;color:var(--mute);font-family:var(--mono)}
+  .h3{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:22px 0 10px;display:flex;justify-content:space-between}
+  .h3 span:last-child{color:var(--ink)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px}
+  .it{position:relative;text-align:left;font:inherit;border:1px solid var(--line-2);background:var(--paper);border-radius:4px;padding:11px 12px 10px 40px;cursor:pointer;min-height:62px;color:var(--ink);-webkit-tap-highlight-color:transparent;transition:background .15s,border-color .15s}
+  .it b{display:block;font-weight:500;font-size:14px;line-height:1.2}
+  .it small{display:block;font-family:var(--mono);font-size:11px;color:var(--mute);margin-top:3px}
+  .it::before{content:"";position:absolute;left:12px;top:13px;width:18px;height:18px;border-radius:3px;border:1.5px solid var(--line-2);background:#fff}
+  .it[data-v="1"]{background:#EEF6D2;border-color:#9DBA3C}
+  .it[data-v="1"]::before{background:var(--olive);border-color:var(--olive);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M4 9.5l3.2 3L14 5.5' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E")}
+  .it[data-v="0.5"]{background:#FFF4DC;border-color:#E8B34B}
+  .it[data-v="0.5"]::before{background:linear-gradient(90deg,#E8B34B 50%,#fff 50%);border-color:#E8B34B}
+  .it .half{position:absolute;right:10px;top:10px;font-family:var(--mono);font-size:10px;color:#A77A1A}
+  .hint{font-size:12px;color:var(--mute);margin-top:8px}
+
+  .steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+  .st{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line-2);border-radius:4px;padding:6px 6px 6px 12px;background:var(--paper)}
+  .st b{font-weight:500;font-size:14px;display:block}
+  .st small{font-family:var(--mono);font-size:11px;color:var(--mute)}
+  .st__c{display:flex;align-items:center;gap:2px}
+  .st__c button{width:38px;height:38px;border:0;border-radius:3px;background:#fff;font-size:20px;cursor:pointer;color:var(--ink)}
+  .st__c output{min-width:26px;text-align:center;font-family:var(--mono);font-size:16px}
+  .st.has{background:#EEF6D2;border-color:#9DBA3C}
+
+  textarea{width:100%;font:inherit;font-size:15px;border:1px solid var(--line-2);border-radius:4px;padding:10px 12px;background:var(--paper);min-height:64px;resize:vertical}
+  .verdict{margin-top:20px;padding:14px;border-radius:4px;background:var(--paper-2);display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .verdict div small{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+  .verdict div b{font-size:22px;font-weight:500;letter-spacing:-.02em}
+  .verdict p{grid-column:1/-1;margin:0;font-size:14px;display:flex;gap:8px;align-items:center}
+
+  /* chart */
+  .chart{margin-top:40px}
+  .chart h3{font-size:24px;font-weight:500;letter-spacing:-.02em;margin:0 0 4px}
+  .bars{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;align-items:end;height:180px;margin-top:18px;position:relative;border-bottom:1px solid var(--line-2)}
+  .bars .tgt{position:absolute;left:0;right:0;border-top:1.5px dashed var(--orange);pointer-events:none}
+  .bars .tgt span{position:absolute;right:0;top:-18px;font-family:var(--mono);font-size:10px;color:var(--orange)}
+  .bar{position:relative;height:100%;display:flex;align-items:flex-end;justify-content:center}
+  .bar i{display:block;width:100%;max-width:64px;background:var(--c);border-radius:3px 3px 0 0;transition:height .5s var(--ease);min-height:2px}
+  .bar i.ghost{background:repeating-linear-gradient(135deg,var(--line-2) 0 4px,transparent 4px 8px);}
+  .bar em{position:absolute;bottom:calc(var(--h) + 4px);font-style:normal;font-family:var(--mono);font-size:11px}
+  .bl{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:6px;font-size:11px;font-family:var(--mono);color:var(--mute);text-align:center}
+
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:34px}
+  .btn-ghost{font:inherit;font-size:14px;border:1px solid var(--line-2);background:transparent;border-radius:3px;padding:10px 14px;cursor:pointer;color:var(--ink)}
+  .note{font-size:12px;color:var(--mute);margin-top:14px;max-width:60ch}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:4px;font-size:14px;opacity:0;transition:.3s var(--ease);pointer-events:none;z-index:50}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  @media (max-width:560px){.arr{flex-direction:row;flex-wrap:wrap;align-items:center;width:100%}.arr small{flex-basis:100%}.leg{padding:18px 14px}.it{padding-left:36px}.it::before{left:10px}.sum__row{grid-template-columns:repeat(2,1fr);row-gap:12px}.sum{position:relative;top:0}}
+</style>
+</head>
+<body>
+
+<header class="top"><img src="barney.webp" alt=""><div><b>Barney’s Fuel Log</b><small>UTCT 100 · 21.11.2026</small></div><a href="https://barnardwork87-ui.github.io/utct-crew/">Crew HQ →</a></header>
+
+<main class="fl">
+  <div class="wrap">
+    <p class="eyebrow">Fuel log · race day</p>
+    <h1>Did he<br><em>actually eat it?</em></h1>
+    <p class="lede">At every crew stop, before you hand him the next packet, ask what he finished. Count the empty wrappers and flasks. He will say “all of it”. Count anyway. Tap once for eaten, twice for half, three times to clear.</p>
+
+    <div class="sum" id="sum"></div>
+
+    <div class="tabs" id="tabs"></div>
+    <div id="leg"></div>
+
+    <section class="chart">
+      <h3>Carbs per hour, by leg</h3>
+      <p class="small" style="color:var(--mute)">Orange line is 75 g/h. Striped bars are legs he hasn’t finished yet, showing the plan.</p>
+      <div class="bars" id="bars"></div>
+      <div class="bl" id="bl"></div>
+    </section>
+
+    <div class="actions">
+      <button class="btn-s" id="share">Send update to WhatsApp</button>
+      <button class="btn-ghost" id="reset">Clear the log</button>
+    </div>
+    <p class="note">The log saves on this phone only, in this browser. It doesn’t sync. Pick one phone to be the fuel phone and keep using that one. If it dies, the WhatsApp updates are your backup. Carb numbers are from the packets where we had them and estimates where we didn’t (potatoes, smoothie, Coke).</p>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+<script>
+(function () {
+  /* ---------- what things are worth (edit here) ---------- */
+  const F = {
+    of:     { n: 'OpenFuel',            c: 60, na: 500 },
+    ofs:    { n: 'OpenFuel refill',     c: 60, na: 500 },
+    waffle: { n: 'Stroopwafel',         c: 19 },
+    bar:    { n: 'PB & choc bar',       c: 25 },
+    maple:  { n: 'Salted Maple gel',    c: 27 },
+    choc:   { n: 'Choc-coffee gel',     c: 27, caf: 35 },
+    // table + extras (per serving, estimates)
+    potato: { n: 'Salted potato',  u: 'per piece',  c: 12, na: 150 },
+    smooth: { n: 'PB Bomb smoothie', u: 'whole cup', c: 70 },
+    noodle: { n: '2-min noodles',  u: 'per pack',   c: 40, na: 900 },
+    coke:   { n: 'Coke',           u: 'per cup',    c: 20, caf: 18 },
+    broth:  { n: 'Broth',          u: 'per cup',    c: 2,  na: 700 },
+    sweets: { n: 'Sweets',         u: 'per handful', c: 20 },
+    biltong:{ n: 'Biltong',        u: 'per handful', c: 0, na: 400 },
+    chick:  { n: 'Chickpeas',      u: 'per handful', c: 8,  na: 150 },
+    revive: { n: 'Revive flask',   u: 'per flask',  c: 0, na: 1000 }
+  };
+  const START = new Date('2026-11-21T04:00:00+02:00').getTime();
+
+  /* ---------- the legs ---------- */
+  const T = (n, k, label) => ({ id: k, f: n, label });
+  const LEGS = [
+    { id: 'kn', to: 'Kloof Nek', from: 'Start', km: 20.5, c: '#E2402B', p19: '06:52', p24: '07:33', cut: '08:00', ph: 2.87,
+      items: [T('of','of1','OpenFuel flask 1'), T('of','of2','OpenFuel flask 2'), T('ofs','ofs1','OpenFuel sachet · Signal Hill'),
+              T('waffle','w1','Waffle · hr 1'), T('bar','b1','Bar · hr 2'), T('maple','m1','Salted Maple · hr 3')],
+      table: ['coke','sweets'] },
+    { id: 'll', to: 'Llandudno', from: 'Kloof Nek', km: 21.2, c: '#1F9E89', p19: '10:53', p24: '12:32', cut: null, ph: 4.02,
+      items: [T('of','of1','OpenFuel flask 1'), T('of','of2','OpenFuel flask 2'), T('ofs','ofs1','OpenFuel sachet · Table Mtn'), T('ofs','ofs2','OpenFuel sachet 2'),
+              T('bar','b1','Bar · Platteklip'), T('bar','b2','Bar · on top'), T('waffle','w1','Waffle · hr 3'), T('maple','m1','Salted Maple · descent')],
+      table: ['potato','coke','sweets'] },
+    { id: 'hb', to: 'Hout Bay', from: 'Llandudno', km: 16.1, c: '#D6337F', p19: '13:51', p24: '16:12', cut: '18:30', ph: 2.97,
+      items: [T('of','of1','OpenFuel flask 1'), T('of','of2','OpenFuel flask 2'), T('ofs','ofs1','OpenFuel sachet · Rocket Rd'),
+              T('bar','b1','Bar · hr 1'), T('waffle','w1','Waffle · hr 2'), T('maple','m1','Salted Maple · hr 3')],
+      table: ['smooth','noodle','potato','coke'] },
+    { id: 'sa', to: 'SARDA', from: 'Hout Bay', km: 19.2, c: '#8E44AD', p19: '17:47', p24: '21:11', cut: '23:00', ph: 3.93,
+      items: [T('of','of1','OpenFuel flask 1'), T('of','of2','OpenFuel flask 2'), T('ofs','ofs1','OpenFuel sachet · Constantia Glen'), T('ofs','ofs2','OpenFuel sachet 2'),
+              T('choc','g1','Choc gel · hr 1'), T('bar','b1','Bar · the climb'), T('waffle','w1','Waffle · hr 3'), T('choc','g2','Choc gel · hr 4')],
+      table: ['potato','coke','sweets'] },
+    { id: 'nw', to: 'Newlands', from: 'SARDA', km: 11.3, c: '#4C5034', p19: '20:14', p24: '00:34', cut: '03:00', ph: 2.45,
+      items: [T('of','of1','OpenFuel flask 1'), T('of','of2','OpenFuel flask 2'), T('ofs','ofs1','OpenFuel sachet · last 30 min'),
+              T('waffle','w1','Waffle · hr 1'), T('choc','g1','Choc gel · hr 2'), T('choc','g2','Choc gel · last 30')],
+      table: ['coke','broth','potato'] },
+    { id: 'fi', to: 'Finish', from: 'Newlands', km: 10.9, c: '#C9A400', p19: '23:00', p24: '04:00', cut: '06:00', ph: 2.77,
+      items: [T('of','of1','OpenFuel flask 1'), T('of','of2','OpenFuel flask 2'), T('ofs','ofs1','OpenFuel sachet · hr 3'),
+              T('choc','g1','Choc gel · hr 1'), T('waffle','w1','Waffle · hr 2'), T('choc','g2','Choc gel · hr 3')],
+      table: ['coke','sweets','biltong','chick'] }
+  ];
+  const EXTRAS = ['revive','sweets','biltong','chick'];
+
+  /* ---------- state ---------- */
+  const KEY = 'utct-fuellog-v1';
+  let S;
+  try { S = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { S = {}; }
+  S.arr = S.arr || {}; S.it = S.it || {}; S.n = S.n || {}; S.note = S.note || {};
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+  let cur = S.cur || (LEGS.find(l => !S.arr[l.id]) || LEGS[LEGS.length - 1]).id;
+
+  /* ---------- maths ---------- */
+  const val = o => ({ c: o.c || 0, na: o.na || 0, caf: o.caf || 0 });
+  function legTotals(l) {
+    let c = 0, na = 0, caf = 0, plan = 0;
+    l.items.forEach(t => { const v = S.it[l.id + ':' + t.id] || 0, f = F[t.f]; plan += f.c;
+      c += f.c * v; na += (f.na || 0) * v; caf += (f.caf || 0) * v; });
+    const counted = new Set();
+    [...l.table, ...EXTRAS].forEach(k => { if (counted.has(k)) return; counted.add(k);
+      const n = S.n[l.id + ':' + k] || 0, f = F[k]; c += f.c * n; na += (f.na || 0) * n; caf += (f.caf || 0) * n; });
+    return { c, na, caf, plan };
+  }
+  function legStart(i) { return i === 0 ? START : S.arr[LEGS[i - 1].id]; }
+  function legHours(i) { const a = legStart(i), b = S.arr[LEGS[i].id]; return a && b && b > a ? (b - a) / 36e5 : null; }
+  function overall() {
+    let c = 0, na = 0, caf = 0, last = null, legsDone = 0;
+    LEGS.forEach((l, i) => { const t = legTotals(l); c += t.c; na += t.na; caf += t.caf; if (S.arr[l.id]) { last = S.arr[l.id]; legsDone = i + 1; } });
+    const h = last ? (last - START) / 36e5 : null;
+    let planToDate = 0; LEGS.slice(0, legsDone).forEach(l => planToDate += legTotals(l).plan);
+    return { c, na, caf, h, gph: h ? c / h : null, naph: h ? na / h : null, legsDone, planToDate };
+  }
+  function mood(g) {
+    if (g == null) return ['', 'Nothing logged yet. He’s probably fine. Probably.'];
+    if (g >= 70) return ['g', 'He’s eating. Leave him alone.'];
+    if (g >= 55) return ['a', 'Bit light. Put food in his hand without asking.'];
+    return ['r', 'He’s running on vibes. Feed him now, discuss later.'];
+  }
+  const fmtT = ms => { const d = new Date(ms); return d.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Johannesburg' }); };
+  const fmtH = h => { const m = Math.round(h * 60); return Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0'); };
+  function parseHM(str) { // HH:MM SAST on race day; before 04:00 = Sunday
+    const [hh, mm] = str.split(':').map(Number); if (isNaN(hh)) return null;
+    let t = new Date('2026-11-21T00:00:00+02:00').getTime() + (hh * 60 + mm) * 6e4;
+    if (hh < 4) t += 864e5; return t;
+  }
+
+  /* ---------- render ---------- */
+  const $ = id => document.getElementById(id);
+  function renderSum() {
+    const o = overall(), [cls, say] = mood(o.gph);
+    const pct = o.planToDate ? Math.min(100, o.c / o.planToDate * 100) : 0;
+    $('sum').innerHTML = `
+      <div class="sum__row">
+        <div><div class="sum__k">Carbs in</div><div class="sum__v">${Math.round(o.c)}<small>g</small></div></div>
+        <div><div class="sum__k">Per hour</div><div class="sum__v">${o.gph ? Math.round(o.gph) : '–'}<small>/ 75 g</small></div></div>
+        <div><div class="sum__k">Sodium / hr</div><div class="sum__v">${o.naph ? Math.round(o.naph) : '–'}<small>mg</small></div></div>
+        <div><div class="sum__k">Caffeine</div><div class="sum__v">${Math.round(o.caf)}<small>mg</small></div></div>
+      </div>
+      <div class="sum__bar" title="vs plan so far"><i style="width:${pct}%"></i></div>
+      <div class="sum__say"><span class="dot ${cls}"></span><span>${say}${o.planToDate ? ` <span style="opacity:.55">· ${Math.round(pct)}% of the plan so far</span>` : ''}</span></div>`;
+  }
+  function renderTabs() {
+    $('tabs').innerHTML = LEGS.map(l => `<button class="tab ${l.id === cur ? 'on' : ''}" data-id="${l.id}" style="--c:${l.c}"><i></i>${l.to}${S.arr[l.id] ? `<span class="ok">✓ ${fmtT(S.arr[l.id])}</span>` : ''}</button>`).join('');
+  }
+  function renderLeg() {
+    const i = LEGS.findIndex(l => l.id === cur), l = LEGS[i], t = legTotals(l), h = legHours(i);
+    const tiles = l.items.map(it => { const v = S.it[l.id + ':' + it.id] || 0, f = F[it.f];
+      return `<button class="it" data-k="${it.id}" data-v="${v}"><b>${it.label}</b><small>${f.c} g carbs${f.caf ? ' · ☕ ' + f.caf + ' mg' : ''}</small>${v === 0.5 ? '<span class="half">HALF</span>' : ''}</button>`; }).join('');
+    const stepper = k => { const n = S.n[l.id + ':' + k] || 0, f = F[k];
+      return `<div class="st ${n ? 'has' : ''}"><div><b>${f.n}</b><small>${f.u} · ${f.c} g${f.na ? ' · ' + f.na + ' mg Na' : ''}</small></div>
+        <div class="st__c"><button data-s="${k}" data-d="-1" aria-label="less">−</button><output>${n}</output><button data-s="${k}" data-d="1" aria-label="more">+</button></div></div>`; };
+    const planH = l.ph, gph = h ? t.c / h : null, [cls, say] = mood(gph);
+    const arrVal = S.arr[l.id] ? fmtT(S.arr[l.id]) : '';
+    $('leg').innerHTML = `<div class="leg" style="--c:${l.c}">
+      <div class="leg__top">
+        <div><div class="leg__eyebrow">Leg ${i + 1} of 6 · ${l.km} km</div><h2>${l.from} → ${l.to}</h2>
+          <div class="leg__meta">Plan <b>${l.p19}</b> (19 h) · <b>${l.p24}</b> (24 h)${l.cut ? ` · cut-off <b style="color:var(--red)">${l.cut}</b>` : ''}</div></div>
+        <div class="arr"><button id="now">${S.arr[l.id] ? 'Re-log arrival now' : 'He’s here · log time'}</button>
+          <input type="time" id="arrIn" value="${arrVal}" aria-label="Arrival time"><small>${h ? 'Leg took ' + fmtH(h) : 'or type the time'}</small></div>
+      </div>
+
+      <div class="h3"><span>What he finished on the way in</span><span>${Math.round(itemsOnly(l))} / ${t.plan} g</span></div>
+      <div class="grid" id="tiles">${tiles}</div>
+      <p class="hint">Tap: eaten · tap again: half · again: clear.</p>
+
+      <div class="h3"><span>At the ${l.to} table, and anything extra</span></div>
+      <div class="steps" id="steps">${[...new Set([...l.table, ...EXTRAS])].map(stepper).join('')}</div>
+
+      <div class="h3"><span>How’s he looking</span></div>
+      <textarea id="note" placeholder="Grumpy, quiet, cramping, singing, whatever. Short.">${S.note[l.id] || ''}</textarea>
+
+      <div class="verdict">
+        <div><small>Carbs this leg</small><b>${Math.round(t.c)} g</b></div>
+        <div><small>Per hour</small><b>${gph ? Math.round(gph) : '–'}${gph ? ' g' : ''}</b></div>
+        <div><small>Plan per hour</small><b>${Math.round(t.plan / planH)} g</b></div>
+        <p><span class="dot ${cls}"></span>${h ? say : 'Log his arrival time to get the per-hour number.'}</p>
+      </div>
+    </div>`;
+  }
+  function itemsOnly(l) { return l.items.reduce((c, t) => c + F[t.f].c * (S.it[l.id + ':' + t.id] || 0), 0); }
+  function renderBars() {
+    const max = 120;
+    const cols = LEGS.map((l, i) => { const h = legHours(i), t = legTotals(l);
+      const g = h ? t.c / h : null, planG = t.plan / l.ph, v = g != null ? g : planG, ht = Math.min(100, v / max * 100);
+      return `<div class="bar" style="--c:${l.c};--h:${ht}%"><i class="${g == null ? 'ghost' : ''}" style="height:${ht}%"></i><em>${Math.round(v)}</em></div>`; }).join('');
+    $('bars').innerHTML = cols + `<div class="tgt" style="bottom:${75 / max * 100}%"><span>75 g/h</span></div>`;
+    $('bl').innerHTML = LEGS.map(l => `<span>${l.to}</span>`).join('');
+  }
+  function render() { renderSum(); renderTabs(); renderLeg(); renderBars(); }
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', e => {
+    const tab = e.target.closest('.tab');
+    if (tab) { cur = tab.dataset.id; S.cur = cur; save(); render(); return; }
+    const it = e.target.closest('.it');
+    if (it) { const k = cur + ':' + it.dataset.k, v = S.it[k] || 0; S.it[k] = v === 0 ? 1 : v === 1 ? 0.5 : 0; save(); render(); if (navigator.vibrate) navigator.vibrate(8); return; }
+    const sb = e.target.closest('[data-s]');
+    if (sb) { const k = cur + ':' + sb.dataset.s; S.n[k] = Math.max(0, (S.n[k] || 0) + Number(sb.dataset.d)); save(); render(); return; }
+    if (e.target.id === 'now') { S.arr[cur] = Date.now(); save(); render(); toast('Logged ' + fmtT(S.arr[cur]) + '. Now count the wrappers.'); }
+  });
+  document.addEventListener('change', e => {
+    if (e.target.id === 'arrIn') { const t = parseHM(e.target.value); if (t) { S.arr[cur] = t; } else { delete S.arr[cur]; } save(); render(); }
+  });
+  document.addEventListener('input', e => { if (e.target.id === 'note') { S.note[cur] = e.target.value; save(); } });
+
+  $('share').addEventListener('click', async () => {
+    const o = overall(), i = LEGS.findIndex(l => l.id === cur), l = LEGS[i], t = legTotals(l), h = legHours(i);
+    const lines = [
+      `⛽ Barney fuel check · ${l.to}${S.arr[l.id] ? ' · ' + fmtT(S.arr[l.id]) : ''}`,
+      `Total: ${Math.round(o.c)} g carbs${o.h ? ` in ${fmtH(o.h)} → ${Math.round(o.gph)} g/h (target 75)` : ''}`,
+      h ? `Last leg: ${Math.round(t.c / h)} g/h` : null,
+      o.naph ? `Sodium: ${Math.round(o.naph)} mg/h` : null,
+      `Caffeine so far: ${Math.round(o.caf)} mg`,
+      S.note[l.id] ? `Looking: ${S.note[l.id]}` : null,
+      `Verdict: ${mood(o.gph)[1]}`
+    ].filter(Boolean).join('\n');
+    if (navigator.share) { try { await navigator.share({ text: lines }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    window.open('https://wa.me/?text=' + encodeURIComponent(lines), '_blank');
+  });
+  $('reset').addEventListener('click', () => {
+    if (!confirm('Clear the whole fuel log on this phone? This can’t be undone.')) return;
+    S = { arr: {}, it: {}, n: {}, note: {} }; cur = 'kn'; save(); render(); toast('Log cleared.');
+  });
+  let tt; function toast(m) { const el = $('toast'); el.textContent = m; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2200); }
+
+  render();
+})();
+</script>
+</body>
+</html>
