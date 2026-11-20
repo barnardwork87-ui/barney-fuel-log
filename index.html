@@ -183,7 +183,7 @@
       <button class="btn-s" id="share">Send update to WhatsApp</button>
       <button class="btn-ghost" id="reset">Clear the log</button>
     </div>
-    <p class="note">Live: when anyone hits Submit, every crew phone with this page open updates. No signal? It saves on your phone and sends itself when you’re back in range. Carb numbers are from the packets where we had them and estimates where we didn’t (potatoes, smoothie, Coke).</p>
+    <p class="note">Live: when anyone hits Submit, it goes into the Google Sheet and every crew phone with this page open picks it up within about 20 seconds. No signal? It saves on your phone and sends itself when you’re back in range. Carb numbers are from the packets where we had them and estimates where we didn’t (potatoes, smoothie, Coke).</p>
   </div>
 </main>
 
@@ -242,9 +242,15 @@
   const EXTRAS = ['revive','sweets','biltong','chick'];
 
   /* ---------- live database (Firebase Realtime Database over REST) ---------- */
-  const DB_URL = (new URLSearchParams(location.search).get('db') || 'FIREBASE_DB_URL').replace(/\/$/, '');
+  // Google Sheet (Apps Script web app) is the live store. ?sheet= overrides it for testing.
+  const QS = new URLSearchParams(location.search);
+  const SHEET_URL = QS.get('sheet') || 'GOOGLE_SHEET_WEB_APP_URL';
+  const SHEET = /^https?:\/\//.test(SHEET_URL);
+  // Firebase is kept as an alternative (?db=)
+  const DB_URL = (QS.get('db') || '').replace(/\/$/, '');
   const ROOT = DB_URL + '/utct2026/log';
-  const LIVE = /^https?:\/\//.test(DB_URL);
+  const LIVE = SHEET || /^https?:\/\//.test(DB_URL);
+  const POLL = 20000;
 
   /* ---------- state ----------
      R      = submitted entries, shared by every phone   { legId: {arr, it:{}, n:{}, note, by, at} }
@@ -316,9 +322,27 @@
     Object.keys(W).forEach(id => { if (!dirty(id)) delete W[id]; }); keep('work', W);
     render();
   }
-  let es;
+  let es, polling = false;
+  async function poll() {
+    if (!SHEET || polling) return; polling = true;
+    try {
+      const r = await fetch(SHEET_URL + (SHEET_URL.includes('?') ? '&' : '?') + 't=' + Date.now());
+      const j = await r.json(); if (!j.ok) throw new Error('bad');
+      R = j.log || {}; conn = 'live'; onRemote();
+      if (Object.keys(queue).length) flush();
+    } catch (e) { conn = navigator.onLine ? 'connecting' : 'offline'; renderConn(); }
+    polling = false;
+  }
+  function rowFor(id, e) {
+    const i = LEGS.findIndex(l => l.id === id), l = LEGS[i], t = legTotals(l, e), h = legHours(i, e.arr);
+    return { stop: `${i + 1} · ${l.to}`, arrived: e.arr ? fmtT(e.arr) : '', by: e.by || '', at: e.at ? fmtT(e.at) : '',
+      carbs: Math.round(t.c), gph: h ? Math.round(t.c / h) : '',
+      eaten: l.items.filter(x => e.it[x.id]).map(x => (e.it[x.id] === 0.5 ? '½ ' : '') + x.label).join(', '),
+      extras: Object.entries(e.n).filter(x => x[1]).map(([k, n]) => `${n}× ${F[k].n}`).join(', '), note: e.note || '' };
+  }
   function connect() {
     if (!LIVE) { conn = 'off'; render(); return; }
+    if (SHEET) { poll(); return; }
     try { es && es.close(); } catch (e) {}
     es = new EventSource(ROOT + '.json');
     es.addEventListener('put', ev => { const m = JSON.parse(ev.data); R = m.path === '/' ? (m.data || {}) : setAt(R, m.path, m.data); conn = 'live'; onRemote(); });
@@ -331,6 +355,12 @@
     if (!LIVE) return;
     for (const [id, e] of Object.entries(queue)) {
       try {
+        if (SHEET) {
+          const r = await fetch(SHEET_URL, { method: 'POST', body: JSON.stringify({ id, entry: e, row: rowFor(id, e) }) });
+          const j = await r.json(); if (!j.ok) throw new Error('bad');
+          delete queue[id]; R = j.log || R; R[id] = R[id] || e; conn = 'live';
+          continue;
+        }
         const r = await fetch(ROOT + '/' + id + '.json', { method: 'PUT', body: JSON.stringify(e) });
         if (!r.ok) throw new Error(r.status);
         R[id] = e; delete queue[id];
@@ -341,6 +371,8 @@
   window.addEventListener('online', () => { connect(); flush(); });
   window.addEventListener('offline', () => { conn = 'offline'; renderConn(); });
   setInterval(() => { if (Object.keys(queue).length) flush(); }, 15000);
+  setInterval(() => { if (!document.hidden) poll(); }, POLL);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
   function submit(id) {
     const w = view(id);
@@ -361,7 +393,7 @@
     const q = Object.keys(queue).length;
     const [cls, txt] = conn === 'off' ? ['a', 'Not connected to the live database yet · saving on this phone']
       : q ? ['a', `${q} submit${q > 1 ? 's' : ''} waiting for signal · will send automatically`]
-      : conn === 'live' ? ['g', 'Live · every crew phone sees the same log']
+      : conn === 'live' ? ['g', SHEET ? 'Live · synced to the Google Sheet · every crew phone sees it' : 'Live · every crew phone sees the same log']
       : conn === 'offline' ? ['r', 'No signal · showing the last data this phone saw']
       : ['', 'Connecting…'];
     el.innerHTML = `<span class="dot ${cls}"></span>${txt}`;
@@ -483,7 +515,8 @@
   $('reset').addEventListener('click', async () => {
     if (!confirm('Clear the WHOLE fuel log for every crew phone? This can’t be undone.')) return;
     if (prompt('Type CLEAR to confirm.') !== 'CLEAR') return;
-    if (LIVE) { try { await fetch(ROOT + '.json', { method: 'DELETE' }); } catch (e) { toast('No signal. Try again.'); return; } }
+    if (LIVE) { try { if (SHEET) await fetch(SHEET_URL, { method: 'POST', body: JSON.stringify({ action: 'clear' }) });
+      else await fetch(ROOT + '.json', { method: 'DELETE' }); } catch (e) { toast('No signal. Try again.'); return; } }
     R = {}; W = {}; queue = {}; cur = 'kn'; keep('remote', R); keep('work', W); keep('queue', queue); keep('cur', cur); render(); toast('Log cleared.');
   });
   let tt; function toast(m) { const el = $('toast'); el.textContent = m; el.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2600); }
